@@ -49,8 +49,8 @@ bool updated;
 float temperatura = 0.0;
 int umiditate = 0;
 
-const char* lat = "44.4268"; // Schimbă cu latitudinea ta
-const char* lon = "26.1025"; // Schimbă cu longitudinea ta
+const char* lat = "44.3167";  // "44.4268"; // Schimbă cu latitudinea ta
+const char* lon = "23.8000";  //"26.1025"; // Schimbă cu longitudinea ta
 
 void getDate() {
   time_t rawtime = timeClient.getEpochTime();
