@@ -1,2 +1,4 @@
 # WeatherStation_ESP32C3_ST7920
 based on tests from https://github.com/tehniq3/NTPclock_ESP32C3_ST7920/
+
+![schematic](https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgGNwI9SwvPAxJJ3IZ73TndWM9Ol1EfACkh9gglnWUounOdiKK3uBTu_U3dC3IQKKlPniOEyynIQMpJskFWQcC0aKbXDaVtHFuTKImC9UOV8h4nVla1KivL6nlShi7HOAlJH1uj4g3t43kCQJ5byR-ASmMOqk9dlv8UrBeMl8k0Hl16eMr_4vMBTpJW_jiZ/s320/ESP32C3_ST7920display_sch2.png)
