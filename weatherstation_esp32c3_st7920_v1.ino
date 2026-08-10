@@ -53,13 +53,22 @@ const char* lat = "44.3167";  // "44.4268"; // Schimbă cu latitudinea ta
 const char* lon = "23.8000";  //"26.1025"; // Schimbă cu longitudinea ta
 
 void getDate() {
-  time_t rawtime = timeClient.getEpochTime();
+  time_t rawtime = timeClient.getEpochTime(); // Aici vine timpul în UTC
+  
+  // Adăugăm manual offsetul calculat de funcția ta (ora României + DST)
+  time_t localTime = rawtime + currentOffset; 
+  
   struct tm * ti;
-  ti = localtime (&rawtime);
+  // Folosim gmtime() deoarece am convertit noi deja timpul la ora locală
+  ti = gmtime(&localTime); 
+  
   zi = ti->tm_mday;
   luna = ti->tm_mon + 1;
   an = ti->tm_year + 1900;
-  zi2 = timeClient.getDay();
+  
+  // Obținem ziua din săptămână (0 = Duminică, 1 = Luni, etc.)
+  // Este mult mai sigur să o luăm din structura calculată decât din timeClient.getDay()
+  zi2 = ti->tm_wday; 
 }
 
 void updateWeather() {
