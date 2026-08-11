@@ -9,32 +9,15 @@
  * rulând pe rând informațiile preluate prin WiFi de la serverele Open-Meteo.
  * 
  * CARACTERISTICI PRINCIPALE:
- * - Sincronizare NTP stabilă folosind biblioteca NTPClient.
- * - Algoritm DST (Ora de vară/iarnă) corectat matematic. Nu mai există erori
- *   de salt al datei la miezul nopții.
+ * - Sincronizare NTP extrem de stabilă, cu fixare strictă a fusului orar 
+ *   pentru a preveni erorile de tip "data se schimbă cu o zi înainte".
+ * - Trecerea automată la ora de vară/iarnă (DST) conform standardului European.
  * - Afișare completă a textului pe ecran (fără prescurtări inestetice).
- * - Cicluri de afișare (3 secunde / ecran): Dată, Zi, Temperatură, Umiditate, 
- *   Vreme, Vânt, Presiune, UV (doar ziua), Calitate Aer.
- * 
- * HARDWARE NECESAR:
- * - Placă: ESP32-C3 Mini.
- * - Ecran: LCD ST7920 128x64 (conectat prin Software SPI).
- * 
- * CONEXIUNI (Software SPI):
- * - Pinul 2 (SCLK_PIN) -> CLK la ecran
- * - Pinul 3 (MOSI_PIN) -> SID/MOSI la ecran
- * - Pinul 4 (CS_PIN)   -> CS la ecran
- * - VCC -> 3.3V, GND -> GND
- * 
- * LIBRARII NECESARE (din Library Manager):
- * - WiFiManager, NTPClient, U8g2, ArduinoJson
  * ==============================================================================
  */
 
 #include <WiFi.h>
 #include <WebServer.h>
-#include <NTPClient.h>
-#include <WiFiUdp.h>
 #include <WiFiManager.h>         
 #include <U8g2lib.h>
 #include <Wire.h>
@@ -48,21 +31,13 @@
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R2, SCLK_PIN, MOSI_PIN, CS_PIN, U8X8_PIN_NONE);
 
-const long timezoneOffset = 2; 
-const char          *ntpServer  = "pool.ntp.org"; 
-const unsigned long updateDelay = 900000;         
-const unsigned long retryDelay  = 5000;           
-const unsigned long wifiCheckInterval = 30000;    
-const unsigned long weatherInterval = 600000;     
+const char* ntpServer = "pool.ntp.org"; 
 
-unsigned long lastUpdatedTime = updateDelay * -1;
+const unsigned long wifiCheckInterval = 30000;    // Verificare WiFi la 30 secunde
+const unsigned long weatherInterval = 600000;     // Actualizare Meteo la 10 minute
+
 unsigned long lastWifiCheckTime = 0;
 unsigned long lastWeatherUpdate = 0;
-
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, ntpServer);
-
-int currentOffset = timezoneOffset * 3600; 
 
 int ora = 0;
 int minut = 0;
@@ -70,8 +45,6 @@ int secunda = 0;
 int zi, zi2, luna, an;
 String weekDays1[7]={"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 String weekDays2[7]={"Duminica", "Luni", "Marti", "Miercuri", "Joi", "Vineri", "Sambata"};
-
-bool updated;
 
 // Variabile meteo
 float temperatura = 0.0;
@@ -86,6 +59,11 @@ int calitateAer = 0;
 // Coordonate GPS
 const char* lat = "44.3167";  
 const char* lon = "23.8000";  
+
+// Mutăm documentele JSON la nivel global pentru a preveni erorile de stivă (Stack Overflow)
+// care pe ESP32 pot corupe variabilele și pot cauza salturi ale datei
+DynamicJsonDocument docMeteo(2048);
+DynamicJsonDocument docAer(512);
 
 // ================= FUNCȚII DE TRADUCERE VREME =================
 String getVremeRO(int code) {
@@ -188,19 +166,7 @@ String getCalificativAQI_EN(int aqi) {
   return "Extremely Poor";
 }
 
-// ================= FUNCȚII TIMP ȘI METEO =================
-void getDate() {
-  time_t rawtime = timeClient.getEpochTime();
-  time_t localTime = rawtime + currentOffset; 
-  struct tm * ti;
-  ti = gmtime(&localTime); 
-  
-  zi = ti->tm_mday;
-  luna = ti->tm_mon + 1;
-  an = ti->tm_year + 1900;
-  zi2 = ti->tm_wday; 
-}
-
+// ================= FUNCȚII METEO API =================
 void updateWeather() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
@@ -213,16 +179,15 @@ void updateWeather() {
     
     if (httpCode == 200) {
       String payload = http.getString();
-      DynamicJsonDocument doc(2048);
-      deserializeJson(doc, payload);
+      deserializeJson(docMeteo, payload);
       
-      temperatura = doc["current"]["temperature_2m"].as<float>();
-      umiditate = doc["current"]["relative_humidity_2m"].as<int>();
-      codVreme = doc["current"]["weather_code"].as<int>();
-      vitezaVant = doc["current"]["wind_speed_10m"].as<float>();
-      directieVant = doc["current"]["wind_direction_10m"].as<int>();
-      presiuneHpa = doc["current"]["pressure_msl"].as<float>();
-      indiceUV = doc["current"]["uv_index"].as<float>();
+      temperatura = docMeteo["current"]["temperature_2m"].as<float>();
+      umiditate = docMeteo["current"]["relative_humidity_2m"].as<int>();
+      codVreme = docMeteo["current"]["weather_code"].as<int>();
+      vitezaVant = docMeteo["current"]["wind_speed_10m"].as<float>();
+      directieVant = docMeteo["current"]["wind_direction_10m"].as<int>();
+      presiuneHpa = docMeteo["current"]["pressure_msl"].as<float>();
+      indiceUV = docMeteo["current"]["uv_index"].as<float>();
     }
     http.end();
   }
@@ -239,55 +204,10 @@ void updateAirQuality() {
     
     if (httpCode == 200) {
       String payload = http.getString();
-      DynamicJsonDocument doc(512);
-      deserializeJson(doc, payload);
-      calitateAer = doc["current"]["european_aqi"].as<int>();
+      deserializeJson(docAer, payload);
+      calitateAer = docAer["current"]["european_aqi"].as<int>();
     }
     http.end();
-  }
-}
-
-void updateDSTOffset() {
-  time_t rawtime = timeClient.getEpochTime(); // Timpul curent în UTC pur
-  if (rawtime < 100000) return; // Protecție la primul start
-
-  // AICI A FOST BUG-UL: Înainte se scădea currentOffset, ceea ce muta timpul în ziua precedentă.
-  // SOLUȚIE: Adăugăm DOAR offset-ul de iarnă (+2 ore) pentru a obține un "Timp Local de Iarnă" stabil.
-  // Asta ne asigură că nu derulăm timpul înapoi peste miezul nopții.
-  time_t localWinterTime = rawtime + (timezoneOffset * 3600);
-  struct tm *winterTi = gmtime(&localWinterTime); 
-  
-  int wDay = winterTi->tm_mday;
-  int wMonth = winterTi->tm_mon + 1; 
-  int wDow = winterTi->tm_wday;      
-  int wHour = winterTi->tm_hour;
-
-  bool dstActive = false;
-
-  // Reguli DST Europa: 
-  // Începe ultima duminică din Martie la 01:00 UTC (03:00 local iarnă)
-  // Se termină ultima duminică din Octombrie la 01:00 UTC (02:00 local iarnă)
-  
-  if (wMonth > 3 && wMonth < 10) {
-    dstActive = true;
-  } else if (wMonth == 3) {
-    int daysToEnd = 31 - wDay;
-    int dowOf31 = (wDow + daysToEnd) % 7;
-    int lastSundayMarch = 31 - dowOf31;
-    // Activăm DST dacă am trecut de duminică sau suntem în duminică după ora 03:00 local
-    if (wDay > lastSundayMarch || (wDay == lastSundayMarch && wHour >= 3)) dstActive = true;
-  } else if (wMonth == 10) {
-    int daysToEnd = 31 - wDay;
-    int dowOf31 = (wDow + daysToEnd) % 7;
-    int lastSundayOctober = 31 - dowOf31;
-    // Menținem DST dacă nu am ajuns la duminică sau suntem în duminică înainte de ora 02:00 local
-    if (wDay < lastSundayOctober || (wDay == lastSundayOctober && wHour < 2)) dstActive = true;
-  }
-
-  int newOffset = (timezoneOffset + (dstActive ? 1 : 0)) * 3600;
-  if (currentOffset != newOffset) {
-     timeClient.setTimeOffset(newOffset);
-     currentOffset = newOffset; 
   }
 }
 
@@ -309,8 +229,25 @@ void setup()
     WiFiManager wifiManager;
     wifiManager.autoConnect("AutoConnectAP");
 
-    timeClient.setTimeOffset(currentOffset);
-    timeClient.begin();
+    // === FIX PENTRU BUG-UL DIN ESP32 CORE 2.0.5 ===
+    // 1. Pornim mai întâi clientul NTP. Pe versiunile vechi, asta 
+    // șterge fusul orar și îl pune automat pe UTC (Londra).
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    
+    // 2. IMEDIAT DUPĂ, suprascriem forțat fusul orar cu România.
+    // Acum ceasul va ști exact când e ora de vară/iarnă și nu va mai 
+    // rămâne în urmă cu 3 ore (ceea ce causa schimbarea datei la 21:00).
+    setenv("TZ", "EET-2EEST,M3.5.0/3,M10.5.0/4", 1);
+    tzset();
+    // ================================================
+
+    Serial.println("Astept sincronizarea NTP...");
+    struct tm timeinfo;
+    while (!getLocalTime(&timeinfo)) {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println("\nNTP Sincronizat cu succes!");
 
     updateWeather();
     updateAirQuality();
@@ -325,27 +262,22 @@ void loop() {
     }
   }
 
-  if (WiFi.status() == WL_CONNECTED && millis() - lastUpdatedTime >= updateDelay) {
-    updated = timeClient.update();
-    if (updated) {
-      getDate();
-      lastUpdatedTime = millis();
-    } else {
-      lastUpdatedTime = millis() - updateDelay + retryDelay;
-    }
-  }
-
   if (WiFi.status() == WL_CONNECTED && millis() - lastWeatherUpdate >= weatherInterval) {
     updateWeather();
     updateAirQuality();
     lastWeatherUpdate = millis();
   }
  
-  updateDSTOffset(); 
-
-  ora = timeClient.getHours();
-  minut = timeClient.getMinutes();
-  secunda = timeClient.getSeconds();
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo, 100)) { 
+    ora = timeinfo.tm_hour;
+    minut = timeinfo.tm_min;
+    secunda = timeinfo.tm_sec;
+    zi = timeinfo.tm_mday;
+    luna = timeinfo.tm_mon + 1;
+    an = timeinfo.tm_year + 1900;
+    zi2 = timeinfo.tm_wday; 
+  }
 
   ceas();
   delay(1000); 
@@ -359,7 +291,7 @@ void ceas()
   int rawState = (millis() / 3000);
   int displayState;
 
-  // Sărim ecranele UV dacă este noapte
+  // Sărim ecranele UV dacă este noapte (valoare < 0.1)
   if (indiceUV < 0.1) {
     int adjState = rawState % 16; 
     if (adjState < 7) displayState = adjState;            
