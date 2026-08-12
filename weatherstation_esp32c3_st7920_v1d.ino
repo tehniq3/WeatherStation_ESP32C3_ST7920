@@ -133,7 +133,7 @@ String getDirectieVantEN(int grade) {
 
 // ================= FUNCȚII UV & CALITATE AER =================
 String getCalificativUV_RO(float uv) {
-  if (uv <= 2) return "Scăzut";
+  if (uv <= 2) return "Scazut";
   if (uv <= 5) return "Moderat";
   if (uv <= 7) return "Ridicat";
   if (uv <= 10) return "Foarte ridicat";
@@ -341,7 +341,7 @@ void ceas()
       u8g2.setFont(u8g2_font_helvB10_tr); u8g2.print(umiditate); u8g2.print("%");
       
     } else if (displayState == 4) { 
-      u8g2.setFont(u8g2_font_helvB08_tr); u8g2.print("Vreme: "); 
+      //u8g2.setFont(u8g2_font_helvB08_tr); u8g2.print("Vreme: "); 
       u8g2.setFont(u8g2_font_helvB10_tr); u8g2.print(getVremeRO(codVreme));
 
     } else if (displayState == 5) { 
@@ -398,7 +398,7 @@ void ceas()
       u8g2.setFont(u8g2_font_helvB10_tr); u8g2.print(umiditate); u8g2.print("%");
       
     } else if (displayState == 13) { 
-      u8g2.setFont(u8g2_font_helvB08_tr); u8g2.print("Weather: "); 
+     // u8g2.setFont(u8g2_font_helvB08_tr); u8g2.print("Weather: "); 
       u8g2.setFont(u8g2_font_helvB10_tr); u8g2.print(getVremeEN(codVreme));
 
     } else if (displayState == 14) { 
