@@ -230,7 +230,7 @@ void loop() {
  
   struct tm timeinfo;
   if (getLocalTime(&timeinfo, 100)) { 
-    ora = timeinfo.tm_hour +1;
+    ora = timeinfo.tm_hour;
     minut = timeinfo.tm_min;
     secunda = timeinfo.tm_sec;
     zi = timeinfo.tm_mday;
